@@ -3,6 +3,34 @@ from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from pydantic import BaseModel
 import ollama
 
+
+def decode_file_contents(contents: bytes) -> str:
+    encodings_to_try = [
+        'utf-8',
+        'cp1251',  # Windows-1251
+        'koi8-r',  # Русская KOI8
+        'iso-8859-5',  # Latin/Cyrillic
+        'windows-1252',  # Западная Европа
+        'ascii',  # Только ASCII
+    ]
+
+    for encoding in encodings_to_try:
+        try:
+            return contents.decode(encoding)
+        except UnicodeDecodeError:
+            continue
+
+    # Если ни одна кодировка не подошла, ищем читаемые фрагменты
+    try:
+        # Пытаемся декодировать как UTF-8, заменяя проблемные символы
+        return contents.decode('utf-8', errors='replace')
+    except:
+        raise HTTPException(
+            status_code=400,
+            detail="Unable to decode file: unsupported encoding. Please provide a plain text file (UTF-8 recommended)."
+        )
+
+
 app = FastAPI()
 
 class TextRequest(BaseModel):
@@ -16,36 +44,13 @@ async def analyze_sentiment(
     # Получаем текст из запроса или файла
     if file:
         contents = await file.read()
-        try:
-            text_content = contents.decode('utf-8')
-        except UnicodeDecodeError:
-            try:
-                text_content = contents.decode('cp1251')  # Windows-1251 encoding
-            except UnicodeDecodeError:
-                raise HTTPException(
-                    status_code=400,
-                    detail="Unable to decode file. Please ensure it's a text file with UTF-8 or Windows-1251 encoding."
-                )
+        text_content = decode_file_contents(contents)
     elif text is not None:
         text_content = text
     else:
         raise HTTPException(
             status_code=400,
             detail="Either text in request body or a file must be provided"
-        )
-
-    # Проверка на пустоту
-    if not text_content or len(text_content.strip()) == 0:
-        raise HTTPException(
-            status_code=400,
-            detail="Text cannot be empty. Please provide non-empty text or file."
-        )
-
-    # Ограничение длины
-    if len(text_content) > 4000:
-        raise HTTPException(
-            status_code=400,
-            detail="Text is too long for sentiment analysis (max 4000 characters)."
         )
 
     prompt = f"""Analyze the sentiment of the text. Reply with one word: positive, negative, neutral.
@@ -95,29 +100,13 @@ async def summarize_text(
     # Get text either from request or from uploaded file
     if file:
         contents = await file.read()
-        try:
-            text_content = contents.decode('utf-8')
-        except UnicodeDecodeError:
-            try:
-                text_content = contents.decode('cp1251')  # Windows-1251 encoding
-            except UnicodeDecodeError:
-                raise HTTPException(
-                    status_code=400,
-                    detail="Unable to decode file. Please ensure it's a text file with UTF-8 or Windows-1251 encoding."
-                )
+        text_content = decode_file_contents(contents)
     elif text is not None:
         text_content = text
     else:
         raise HTTPException(
             status_code=400,
             detail="Either text in request body or a file must be provided"
-        )
-
-    # Check text length
-    if len(text_content) > 4000:
-        raise HTTPException(
-            status_code=400,
-            detail="Text is too long (max 4000 characters). Please provide shorter text or split it into parts."
         )
 
     # Create summarization prompt
