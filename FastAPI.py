@@ -57,7 +57,7 @@ Text: {text_content}"""
             model='gemma3:12b',
             messages=[{'role': 'user', 'content': prompt}],
             options={'temperature': 0},
-            timeout=30
+           
         )
         content = response['message']['content'].strip()
     except Exception as e:
