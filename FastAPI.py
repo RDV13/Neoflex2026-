@@ -32,6 +32,20 @@ async def analyze_sentiment(request: TextRequest = None, file: UploadFile = File
             detail="Either text in request body or a file must be provided"
         )
 
+    # Проверка на пустоту
+    if not text or len(text.strip()) == 0:
+        raise HTTPException(
+            status_code=400,
+            detail="Text cannot be empty. Please provide non-empty text or file."
+        )
+
+    # Ограничение длины
+    if len(text) > 4000:
+        raise HTTPException(
+            status_code=400,
+            detail="Text is too long for sentiment analysis (max 4000 characters)."
+        )
+
     prompt = f"""Analyze the sentiment of the text. Reply with one word: positive, negative, neutral.
 On the next line, write the confidence from 0.0 to 1.0.
 
@@ -41,7 +55,8 @@ Text: {text}"""
         response = ollama.chat(
             model='gemma3:12b',
             messages=[{'role': 'user', 'content': prompt}],
-            options={'temperature': 0}
+            options={'temperature': 0},
+            timeout=30
         )
         content = response['message']['content'].strip()
     except Exception as e:
@@ -66,6 +81,7 @@ Text: {text}"""
         raise HTTPException(status_code=500, detail="Confidence must be between 0 and 1")
 
     return {"sentiment": sentiment, "confidence": confidence}
+
 
 @app.post("/summarize")
 async def summarize_text(request: TextRequest = None, file: UploadFile = File(None)):
