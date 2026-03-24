@@ -1,4 +1,3 @@
-# Ячейка 1: импорт и определение приложения
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from pydantic import BaseModel
 import ollama
