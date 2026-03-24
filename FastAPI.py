@@ -1,33 +1,33 @@
+# Ячейка 1: импорт и определение приложения
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from pydantic import BaseModel
 import ollama
 
 app = FastAPI()
 
-
 class TextRequest(BaseModel):
     text: str
-
 
 @app.post("/analyze")
 async def analyze_sentiment(
     text: str = Form(None),
-    file: UploadFile = File(None)):
+    file: UploadFile = File(None)
+):
     # Получаем текст из запроса или файла
     if file:
         contents = await file.read()
         try:
-            text = contents.decode('utf-8')
+            text_content = contents.decode('utf-8')
         except UnicodeDecodeError:
             try:
-                text = contents.decode('cp1251')  # Windows-1251 encoding
+                text_content = contents.decode('cp1251')  # Windows-1251 encoding
             except UnicodeDecodeError:
                 raise HTTPException(
                     status_code=400,
                     detail="Unable to decode file. Please ensure it's a text file with UTF-8 or Windows-1251 encoding."
                 )
-    elif request and request.text:
-        text = request.text
+    elif text is not None:
+        text_content = text
     else:
         raise HTTPException(
             status_code=400,
@@ -35,14 +35,14 @@ async def analyze_sentiment(
         )
 
     # Проверка на пустоту
-    if not text or len(text.strip()) == 0:
+    if not text_content or len(text_content.strip()) == 0:
         raise HTTPException(
             status_code=400,
             detail="Text cannot be empty. Please provide non-empty text or file."
         )
 
     # Ограничение длины
-    if len(text) > 4000:
+    if len(text_content) > 4000:
         raise HTTPException(
             status_code=400,
             detail="Text is too long for sentiment analysis (max 4000 characters)."
@@ -51,8 +51,7 @@ async def analyze_sentiment(
     prompt = f"""Analyze the sentiment of the text. Reply with one word: positive, negative, neutral.
 On the next line, write the confidence from 0.0 to 1.0.
 
-Text: {text}"""
-
+Text: {text_content}"""
     try:
         response = ollama.chat(
             model='gemma3:12b',
@@ -88,7 +87,8 @@ Text: {text}"""
 @app.post("/summarize")
 async def summarize_text(
     text: str = Form(None),
-    file: UploadFile = File(None)):
+    file: UploadFile = File(None)
+):
     """
     Endpoint for text summarization. Accepts either text in request body or a text file.
     """
@@ -96,17 +96,17 @@ async def summarize_text(
     if file:
         contents = await file.read()
         try:
-            text = contents.decode('utf-8')
+            text_content = contents.decode('utf-8')
         except UnicodeDecodeError:
             try:
-                text = contents.decode('cp1251')  # Windows-1251 encoding
+                text_content = contents.decode('cp1251')  # Windows-1251 encoding
             except UnicodeDecodeError:
                 raise HTTPException(
                     status_code=400,
                     detail="Unable to decode file. Please ensure it's a text file with UTF-8 or Windows-1251 encoding."
                 )
-    elif request and request.text:
-        text = request.text
+    elif text is not None:
+        text_content = text
     else:
         raise HTTPException(
             status_code=400,
@@ -114,7 +114,7 @@ async def summarize_text(
         )
 
     # Check text length
-    if len(text) > 4000:
+    if len(text_content) > 4000:
         raise HTTPException(
             status_code=400,
             detail="Text is too long (max 4000 characters). Please provide shorter text or split it into parts."
@@ -126,7 +126,7 @@ Keep the summary to 3–5 sentences. Focus on main facts, important details, and
 Omit minor details, examples, and repetitions.
 
 Original text:
-{text}
+{text_content}
 
 Summary (3–5 sentences):"""
 
@@ -146,7 +146,7 @@ Summary (3–5 sentences):"""
             )
 
         return {
-            "original_text_length": len(text),
+            "original_text_length": len(text_content),
             "summary_length": len(summary),
             "summary": summary
         }
@@ -155,4 +155,3 @@ Summary (3–5 sentences):"""
             status_code=500,
             detail=f"Error during summarization: {str(e)}"
         )
-
