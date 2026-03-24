@@ -10,7 +10,9 @@ class TextRequest(BaseModel):
 
 
 @app.post("/analyze")
-async def analyze_sentiment(request: TextRequest = None, file: UploadFile = File(None)):
+async def analyze_sentiment(
+    text: str = Form(None),
+    file: UploadFile = File(None)):
     # Получаем текст из запроса или файла
     if file:
         contents = await file.read()
@@ -84,7 +86,9 @@ Text: {text}"""
 
 
 @app.post("/summarize")
-async def summarize_text(request: TextRequest = None, file: UploadFile = File(None)):
+async def summarize_text(
+    text: str = Form(None),
+    file: UploadFile = File(None)):
     """
     Endpoint for text summarization. Accepts either text in request body or a text file.
     """
