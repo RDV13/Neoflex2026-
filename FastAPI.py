@@ -1,7 +1,11 @@
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from pydantic import BaseModel
 import ollama
-
+import docx  # python-docx
+import PyPDF2
+from odf import text, load
+from io import BytesIO
+import os
 
 def decode_file_contents(contents: bytes) -> str:
     encodings_to_try = [
@@ -29,6 +33,53 @@ def decode_file_contents(contents: bytes) -> str:
             detail="Unable to decode file: unsupported encoding. Please provide a plain text file (UTF-8 recommended)."
         )
 
+def extract_text_from_file(contents: bytes, filename: str) -> str:
+    """Извлекает текст из файлов разных форматов (txt, doc, docx, pdf, odt)."""
+    file_extension = os.path.splitext(filename.lower())[1]
+
+    try:
+        if file_extension in ['.txt', '.text']:
+            return decode_file_contents(contents)
+
+        elif file_extension in ['.doc', '.docx']:
+            # Для DOCX используем python-docx напрямую из байтов
+            if file_extension == '.docx':
+                docx_obj = docx.Document(BytesIO(contents))
+                text_parts = []
+                for paragraph in docx_obj.paragraphs:
+                    text_parts.append(paragraph.text)
+                return '\n'.join(text_parts)
+            else:  # .doc (старый формат)
+                raise HTTPException(
+                    status_code=400,
+                    detail="DOC format is not fully supported. Please convert to DOCX or TXT."
+                )
+
+        elif file_extension == '.pdf':
+            pdf_reader = PyPDF2.PdfReader(BytesIO(contents))
+            text_parts = []
+            for page in pdf_reader.pages:
+                text_parts.append(page.extract_text())
+            return '\n'.join(text_parts)
+
+        elif file_extension == '.odt':
+            odt_doc = load(BytesIO(contents))
+            text_parts = []
+            for element in odt_doc.getElementsByType(text.P):
+                text_parts.append(element.getText())
+            return '\n'.join(text_parts)
+
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unsupported file format: {file_extension}. Supported formats: txt, docx, pdf, odt."
+            )
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error processing file {filename}: {str(e)}"
+        )
 
 app = FastAPI()
 
@@ -43,7 +94,7 @@ async def analyze_sentiment(
     # Получаем текст из запроса или файла
     if file:
         contents = await file.read()
-        text_content = decode_file_contents(contents)
+        text_content = extract_text_from_file(contents, file.filename)
     elif text is not None:
         text_content = text
     else:
@@ -96,10 +147,10 @@ async def summarize_text(
     """
     Endpoint for text summarization. Accepts either text in request body or a text file.
     """
-    # Get text either from request or from uploaded file
+    # Получаем текст из запроса или файла
     if file:
         contents = await file.read()
-        text_content = decode_file_contents(contents)
+        text_content = extract_text_from_file(contents, file.filename)
     elif text is not None:
         text_content = text
     else:
