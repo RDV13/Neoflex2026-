@@ -104,7 +104,7 @@ class MultiFileAPITester:
         files = {'file': ('input.txt', text, 'text/plain')}
 
         try:
-            response = self.session.post(url, files=files, timeout=60)
+            response = self.session.post(url, files=files, timeout=180)
             response.raise_for_status()
             return response.json()
         except requests.exceptions.RequestException as e:
