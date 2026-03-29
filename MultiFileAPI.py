@@ -174,7 +174,7 @@ class MultiFileAPITester:
 
 def main():
     # Настройки
-    API_URL = ""
+    API_URL = "..."
     DATASET_DIRECTORY = "dataset_files"  # Директория с файлами
     OUTPUT_PATH = "results_from_files.csv"
     TASK_TYPE = "analyze"  # "analyze" или "summarize"
