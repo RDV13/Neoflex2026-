@@ -3,7 +3,7 @@ from pydantic import BaseModel
 import ollama
 import docx  # python-docx
 import PyPDF2
-from odf import text, load
+from odfdo import Document as OdfDocument
 from io import BytesIO
 import os
 
@@ -114,10 +114,63 @@ async def analyze_sentiment(
             detail="Either text in request body or a file must be provided"
         )
 
-    prompt = f"""Analyze the sentiment of the text. Reply with one word: positive, negative, neutral.
-On the next line, write the confidence from 0.0 to 1.0.
+    prompt = f"""
+## ROLE
+You are a professional sentiment analysis expert. Your task is to accurately determine the emotional tone of text and assess confidence in your judgment.
 
-Text: {text_content}"""
+## GOAL
+Determine the sentiment of the text (positive, negative, neutral) and provide a confidence score (0.0 to 1.0).
+
+## TASKS
+1. Read the input text carefully.
+2. Identify the overall emotional tone.
+3. Evaluate confidence in the classification.
+4. Provide output in the strictly defined format.
+
+## CONTEXT
+The text may be in English or Russian, contain informal language, slang, emojis, and typos. Analyze the overall mood, not individual words.
+
+## INPUT DATA
+Text for analysis:
+---
+{text_content}
+---
+
+## ANALYSIS INSTRUCTIONS
+1. Positive sentiment: expresses joy, approval, gratitude, enthusiasm.
+2. Negative sentiment: contains criticism, dissatisfaction, disappointment, anger.
+3. Neutral sentiment: states facts without emotional coloring, contains technical information.
+
+
+## OUTPUT FORMAT
+Strictly follow this format:
+- First line: one word — sentiment (`positive`, `negative`, or `neutral`).
+- Second line: floating‑point number — confidence (from `0.0` to `1.0`, one decimal place).
+
+## EXAMPLES
+Example 1:
+Text: "Excellent service, very satisfied!"
+Response:
+positive
+0.9
+
+Example 2:
+Text: "Nothing special, just an ordinary day"
+Response:
+neutral
+0.7
+
+Example 3:
+Text: "Terrible, I'll never use it again"
+Response:
+negative
+0.8
+
+## TEXT FOR ANALYSIS
+---
+{text_content}
+---
+"""
     try:
         response = ollama.chat(
             model='gemma3:12b',
@@ -171,14 +224,55 @@ async def summarize_text(
         )
 
     # Create summarization prompt
-    prompt = f"""Create a concise summary of the following text, extracting only the key information.
-Keep the summary to 3–5 sentences. Focus on main facts, important details, and essential conclusions.
-Omit minor details, examples, and repetitions.
+    prompt = f"""
+## ROLE
+You are an experienced editor and text analyst. Your task is to create concise, informative summaries of any texts while preserving key information.
 
+## GOAL
+Create a structured summary of 3–5 sentences that conveys main ideas and important details without extra information.
+
+## TASKS
+1. Read and analyze the full text.
+2. Extract key facts, main ideas, and critical conclusions.
+3. Eliminate examples, repetitions, and minor details.
+4. Formulate 3–5 coherent sentences reflecting the essence of the text.
+5. Ensure the summary reads as a standalone piece.
+
+## CONTEXT
+The text may contain technical information, news, articles, reviews, or informal communication. The summary must be understandable without reading the original.
+
+## INPUT DATA
 Original text:
+---
 {text_content}
+---
 
-Summary (3–5 sentences):"""
+## SUMMARY CREATION INSTRUCTIONS
+1. Focus on the main topic and key conclusions.
+2. Remove repetitions and redundant details.
+3. Preserve critical numbers, dates, and names if essential.
+4. Use simple, clear language.
+5. Maintain logical coherence between sentences.
+
+## QUALITY CRITERIA
+- Length: exactly 3–5 sentences.
+- Completeness: all key ideas preserved.
+- Conciseness: examples and minor details excluded.
+- Readability: text is easily comprehensible.
+
+## OUTPUT FORMAT
+Provide only the final summary — 3–5 consecutive sentences without additional comments, headings, or formatting.
+
+## EXAMPLE
+Original text: "Yesterday, a major technology forum was held in Moscow. It was attended by over 5 000 professionals from different countries. Key topics included artificial intelligence and cybersecurity. Experts discussed AI development prospects for the next 5 years and shared best practices for data protection. The event concluded with the signing of several important agreements between companies."
+
+Summary: "A technology forum took place in Moscow with over 5 000 professionals in attendance. The main topics were artificial intelligence and cybersecurity. Experts reviewed AI development prospects for the next 5 years and discussed data protection methods. The forum resulted in important inter‑company agreements being signed."
+
+## TEXT TO SUMMARIZE
+---
+{text_content}
+---
+"""
 
     try:
         response = ollama.chat(
