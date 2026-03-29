@@ -63,10 +63,21 @@ def extract_text_from_file(contents: bytes, filename: str) -> str:
             return '\n'.join(text_parts)
 
         elif file_extension == '.odt':
-            odt_doc = load(BytesIO(contents))
+            doc = Document(BytesIO(contents))
+            body = doc.body
             text_parts = []
-            for element in odt_doc.getElementsByType(text.P):
-                text_parts.append(element.getText())
+            # Извлекаем текст из параграфов
+            for paragraph in body.get_elements("text:p"):
+                text = paragraph.text
+                if text and text.strip():
+                    text_parts.append(text.strip())
+
+            # Извлекаем текст из заголовков
+            for heading in body.get_elements("text:h"):
+                text = heading.text
+                if text and text.strip():
+                    text_parts.append(text.strip())
+
             return '\n'.join(text_parts)
 
         else:
