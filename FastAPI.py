@@ -1,11 +1,14 @@
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from pydantic import BaseModel
+from typing import Literal
 import ollama
 import docx  # python-docx
 import PyPDF2
 from odfdo import Document as OdfDocument
 from io import BytesIO
 import os
+import json
+import re
 
 def decode_file_contents(contents: bytes) -> str:
     encodings_to_try = [
@@ -92,6 +95,30 @@ def extract_text_from_file(contents: bytes, filename: str) -> str:
             detail=f"Error processing file {filename}: {str(e)}"
         )
 
+class SentimentSGR(BaseModel):
+    sentiment_sgr: Literal["positive", "negative", "neutral"]
+    confidence_sgr: float
+
+class SummarySGR(BaseModel):
+    summary_sgr: str
+    original_text_length_sgr: int
+    summary_length_sgr: int
+
+def extract_sgr_json(raw_response: str) -> dict | None:
+    """
+    Извлекает JSON‑блок SGR из конца ответа модели.
+    Возвращает словарь с данными SGR или None, если JSON не найден.
+    """
+    # Ищем JSON в конце строки (от { до })
+    match = re.search(r'\{.*\}$', raw_response, re.DOTALL)
+    if match:
+        json_str = match.group(0)
+        try:
+            return json.loads(json_str)
+        except json.JSONDecodeError:
+            pass
+    return None
+
 app = FastAPI()
 
 class TextRequest(BaseModel):
@@ -171,37 +198,65 @@ negative
 {text_content}
 ---
 """
+    
+    additional_sgr_analyze = """
+
+## STRUCTURED OUTPUT (SGR) - REQUIRED
+After your regular response, add this JSON at the very end:
+{"sentiment_sgr": "positive|negative|neutral", "confidence_sgr": 0.0–1.0}
+
+RULES:
+- JSON must be the LAST thing in your response
+- Do not include any text after the JSON object
+- The JSON must be valid and parsable
+- Use the exact field names: "sentiment_sgr" and "confidence_sgr"
+"""
+
+    prompt = prompt + additional_sgr_analyze
+    
     try:
         response = ollama.chat(
             model='gemma3:12b',
             messages=[{'role': 'user', 'content': prompt}],
             options={'temperature': 0},
-           
         )
-        content = response['message']['content'].strip()
+        raw_output = response['message']['content'].strip()
+
+        # Извлекаем SGR‑данные
+        sgr_data = extract_sgr_json(raw_output)
+
+        if sgr_data:
+            # Валидируем через Pydantic
+            sgr_result = SentimentSGR(**sgr_data)
+            return {
+                "sentiment": sgr_result.sentiment_sgr,
+                "confidence": sgr_result.confidence_sgr,
+                "sgr_raw": raw_output  # опционально: полный ответ с JSON
+            }
+        else:
+            # Fallback: парсим старый формат (если SGR не сработал)
+            lines = raw_output.split('\n')
+            if len(lines) < 2:
+                raise HTTPException(status_code=500, detail="Invalid LLM response format")
+
+            sentiment = lines[0].lower()
+            try:
+                confidence = float(lines[1])
+            except ValueError:
+                raise HTTPException(status_code=500, detail="Invalid confidence value")
+
+            if sentiment not in ["positive", "negative", "neutral"]:
+                raise HTTPException(status_code=500, detail="Invalid sentiment label")
+            if not (0 <= confidence <= 1):
+                raise HTTPException(status_code=500, detail="Confidence must be between 0 and 1")
+
+            return {"sentiment": sentiment, "confidence": confidence}
+
     except Exception as e:
         raise HTTPException(
             status_code=500,
             detail=f"Error communicating with Ollama: {str(e)}"
         )
-
-    lines = content.split('\n')
-    if len(lines) < 2:
-        raise HTTPException(status_code=500, detail="Invalid LLM response format")
-
-    sentiment = lines[0].lower()
-    try:
-        confidence = float(lines[1])
-    except ValueError:
-        raise HTTPException(status_code=500, detail="Invalid confidence value")
-
-    if sentiment not in ["positive", "negative", "neutral"]:
-        raise HTTPException(status_code=500, detail="Invalid sentiment label")
-    if not (0 <= confidence <= 1):
-        raise HTTPException(status_code=500, detail="Confidence must be between 0 and 1")
-
-    return {"sentiment": sentiment, "confidence": confidence}
-
 
 @app.post("/summarize")
 async def summarize_text(
@@ -274,26 +329,57 @@ Summary: "A technology forum took place in Moscow with over 5 000 professionals 
 ---
 """
 
+    additional_sgr_summarize = """
+
+## STRUCTURED OUTPUT (SGR) - REQUIRED
+After your summary, add this JSON at the very end:
+{"summary_sgr": "string", "original_text_length_sgr": number, "summary_length_sgr": number}
+
+RULES:
+- JSON must be the LAST thing in your response
+- Do not include any text after the JSON object
+- Fill lengths with actual character counts
+- The JSON must be valid and parsable
+- Use the exact field names as shown above
+"""
+
+    prompt = prompt + additional_sgr_summarize
+
     try:
         response = ollama.chat(
             model='gemma3:12b',
             messages=[{'role': 'user', 'content': prompt}],
-            options={'temperature': 0.3, 'num_predict': 300}  # max_tokens аналог
+            options={'temperature': 0.3, 'num_predict': 300}
         )
-        summary = response['message']['content'].strip()
+        raw_output = response['message']['content'].strip()
 
-        # Validate summary
-        if not summary or len(summary) < 10:
-            raise HTTPException(
-                status_code=500,
-                detail="Generated summary is too short or empty"
-            )
+        # Извлекаем SGR‑данные
+        sgr_data = extract_sgr_json(raw_output)
 
-        return {
-            "original_text_length": len(text_content),
-            "summary_length": len(summary),
-            "summary": summary
-        }
+        if sgr_data:
+            # Валидируем через Pydantic
+            sgr_result = SummarySGR(**sgr_data)
+            return {
+                "summary": sgr_result.summary_sgr,
+                "original_text_length": sgr_result.original_text_length_sgr,
+                "summary_length": sgr_result.summary_length_sgr,
+                "sgr_raw": raw_output  # опционально: полный ответ с JSON
+            }
+        else:
+            # Fallback: используем старый способ
+            summary = raw_output
+            if not summary or len(summary) < 10:
+                raise HTTPException(
+                    status_code=500,
+                    detail="Generated summary is too short or empty"
+                )
+
+            return {
+                "original_text_length": len(text_content),
+                "summary_length": len(summary),
+                "summary": summary
+            }
+
     except Exception as e:
         raise HTTPException(
             status_code=500,
