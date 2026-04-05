@@ -1,4 +1,5 @@
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
+from retriever import HybridRetriever
 from pydantic import BaseModel
 from typing import Literal
 import ollama
@@ -120,6 +121,13 @@ def extract_sgr_json(raw_response: str) -> dict | None:
     return None
 
 app = FastAPI()
+retriever = HybridRetriever()
+
+sample_documents = [
+    # ... примеры
+    ]
+retriever.add_documents(sample_documents)
+
 
 class TextRequest(BaseModel):
     text: str
