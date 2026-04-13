@@ -25,7 +25,7 @@ from fastapi import HTTPException
 
 def analyze_sentiment_tool(text: str) -> SentimentAnalysis:
     """Инструмент для анализа тональности текста"""
-    # Используем существующий промт из /analyze endpoint
+   
     prompt = f"""
 ## ROLE
 Professional sentiment analysis expert
