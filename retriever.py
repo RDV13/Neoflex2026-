@@ -14,7 +14,7 @@ class HybridRetriever:
         # Лексический поиск
         self.bm25 = None
         self.documents = []
-        self.tokenized_corpus = []  #токены
+        self.tokenized_corpus = []  # Храним токенизированный корпус
 
     def add_documents(self, texts: List[str], metadata: List[Dict] = None):
         """Добавляет документы в ретривер"""
@@ -24,20 +24,24 @@ class HybridRetriever:
         new_tokenized = [doc.split(" ") for doc in texts]
         self.tokenized_corpus.extend(new_tokenized)
 
-        # Перестраиваем BM25 на всём корпусе
+        # Перестраиваем BM25 
         self.bm25 = BM25Okapi(self.tokenized_corpus)
 
         # Обновляем векторный индекс
-        new_embeddings = self.embedding_model.encode(texts)
+        new_embeddings = self.embedding_model.encode(texts).astype('float32')
+
         if self.embeddings is None:
             self.embeddings = new_embeddings
         else:
             self.embeddings = np.vstack([self.embeddings, new_embeddings])
 
+        # Нормализуем все векторы для косинусного сходства
+        faiss.normalize_L2(self.embeddings)
+
         # Создаём FAISS индекс
         dimension = self.embeddings.shape[1]
-        self.index = faiss.IndexFlatIP(dimension)  # Inner Product для косинусного сходства
-        self.index.add(self.embeddings.astype('float32'))
+        self.index = faiss.IndexFlatIP(dimension)
+        self.index.add(self.embeddings
 
     def retrieve(self, query: str, k: int = 3) -> List[Dict]:
         """Выполняет гибридный поиск"""
@@ -46,7 +50,8 @@ class HybridRetriever:
         bm25_top_k = np.argsort(bm25_scores)[-k:]
 
         # Семантический поиск (векторный)
-        query_embedding = self.embedding_model.encode([query])
+        query_embedding = self.embedding_model.encode([query]).astype('float32')
+        faiss.normalize_L2(query_embedding)  # Нормализуем запрос
         similarities, indices = self.index.search(
             query_embedding.astype('float32'), k
         )
