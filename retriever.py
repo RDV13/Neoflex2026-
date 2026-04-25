@@ -14,7 +14,7 @@ class HybridRetriever:
         # Лексический поиск
         self.bm25 = None
         self.documents = []
-        self.tokenized_corpus = []  # Храним токенизированный корпус
+        self.tokenized_corpus = []  #токены
 
     def add_documents(self, texts: List[str], metadata: List[Dict] = None):
         """Добавляет документы в ретривер"""
