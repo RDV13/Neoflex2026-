@@ -1,4 +1,3 @@
-import import_ipynb
 from fastapi import FastAPI, HTTPException, UploadFile, File, Form
 from retriever import HybridRetriever
 from pydantic import BaseModel
@@ -271,11 +270,21 @@ Text for analysis:
 2. Negative sentiment: contains criticism, dissatisfaction, disappointment, anger.
 3. Neutral sentiment: states facts without emotional coloring, contains technical information.
 
-
 ## OUTPUT FORMAT
 Strictly follow this format:
 - First line: one word — sentiment (`positive`, `negative`, or `neutral`).
 - Second line: floating‑point number — confidence (from `0.0` to `1.0`, one decimal place).
+- Third: a blank line.
+- Fourth: JSON object with the following structure:
+{{"sentiment_sgr": "positive|negative|neutral", "confidence_sgr": confidence_value}}
+
+RULES FOR JSON:
+- The JSON must be the LAST thing in your response.
+- Do not include any text after the JSON object.
+- The JSON must be valid and parsable.
+- Replace `positive|negative|neutral` with the actual sentiment label.
+- Replace `confidence_value` with the actual confidence score (e.g., 0.8).
+- Ensure the JSON is on a separate line.
 
 ## EXAMPLES
 Example 1:
@@ -284,11 +293,15 @@ Response:
 positive
 0.9
 
+{{"sentiment_sgr": "positive", "confidence_sgr": 0.9}}
+
 Example 2:
 Text: "Nothing special, just an ordinary day"
 Response:
 neutral
 0.7
+
+{{"sentiment_sgr": "neutral", "confidence_sgr": 0.7}}
 
 Example 3:
 Text: "Terrible, I'll never use it again"
@@ -296,26 +309,9 @@ Response:
 negative
 0.8
 
-## TEXT FOR ANALYSIS
----
-{text_content}
----
-"""
-    
-    additional_sgr_analyze = """
-
-## STRUCTURED OUTPUT (SGR) - REQUIRED
-After your regular response, add this JSON at the very end:
-{"sentiment_sgr": "positive|negative|neutral", "confidence_sgr": 0.0–1.0}
-
-RULES:
-- JSON must be the LAST thing in your response
-- Do not include any text after the JSON object
-- The JSON must be valid and parsable
-- Use the exact field names: "sentiment_sgr" and "confidence_sgr"
+{{"sentiment_sgr": "negative", "confidence_sgr": 0.8}}
 """
 
-    prompt = prompt + additional_sgr_analyze
     
     try:
         response = ollama.chat(
@@ -400,7 +396,7 @@ Create a structured summary of 3–5 sentences that conveys main ideas and impor
 ## TASKS
 1. Read and analyze the full text.
 2. Extract key facts, main ideas, and critical conclusions.
-3. Eliminate examples, repetitions, and minor details.
+3. Eliminate repetitions and minor details.
 4. Formulate 3–5 coherent sentences reflecting the essence of the text.
 5. Ensure the summary reads as a standalone piece.
 
@@ -427,34 +423,29 @@ Original text:
 - Readability: text is easily comprehensible.
 
 ## OUTPUT FORMAT
-Provide only the final summary — 3–5 consecutive sentences without additional comments, headings, or formatting.
+1. First, provide the final summary — 3–5 consecutive sentences. Do not include any headings, comments, or formatting.
+2. Then, add a blank line.
+3. Finally, add the following JSON object:
+{{"summary_sgr": "your_summary_here", "original_text_length_sgr": original_length, "summary_length_sgr": summary_length}}
 
-## EXAMPLE
+RULES FOR JSON:
+- The JSON must be the LAST thing in your response.
+- Do not include any text after the JSON object.
+- Replace `your_summary_here` with the actual summary text.
+- Replace `original_length` with the character count of the original text.
+- Replace `summary_length` with the character count of your summary.
+- Ensure the JSON is valid and parsable.
+
+## EXAMPLES
+Example 1:
 Original text: "Yesterday, a major technology forum was held in Moscow. It was attended by over 5 000 professionals from different countries. Key topics included artificial intelligence and cybersecurity. Experts discussed AI development prospects for the next 5 years and shared best practices for data protection. The event concluded with the signing of several important agreements between companies."
 
-Summary: "A technology forum took place in Moscow with over 5 000 professionals in attendance. The main topics were artificial intelligence and cybersecurity. Experts reviewed AI development prospects for the next 5 years and discussed data protection methods. The forum resulted in important inter‑company agreements being signed."
+Summary:
+A technology forum took place in Moscow with over 5 000 professionals in attendance. The main topics were artificial intelligence and cybersecurity. Experts reviewed AI development prospects for the next 5 years and discussed data protection methods. The forum resulted in important inter‑company agreements being signed.
 
-## TEXT TO SUMMARIZE
----
-{text_content}
----
+{{"summary_sgr": "A technology forum took place in Moscow with over 5 000 professionals in attendance. The main topics were artificial intelligence and cybersecurity. Experts reviewed AI development prospects for the next 5 years and discussed data protection methods. The forum resulted in important inter‑company agreements being signed.", "original_text_length_sgr": 346, "summary_length_sgr": 258}}
 """
 
-    additional_sgr_summarize = """
-
-## STRUCTURED OUTPUT (SGR) - REQUIRED
-After your summary, add this JSON at the very end:
-{"summary_sgr": "string", "original_text_length_sgr": number, "summary_length_sgr": number}
-
-RULES:
-- JSON must be the LAST thing in your response
-- Do not include any text after the JSON object
-- Fill lengths with actual character counts
-- The JSON must be valid and parsable
-- Use the exact field names as shown above
-"""
-
-    prompt = prompt + additional_sgr_summarize
 
     try:
         response = ollama.chat(
