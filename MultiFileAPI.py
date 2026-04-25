@@ -9,7 +9,7 @@ import PyPDF2
 from odfdo import Document as OdfDocument
 
 class MultiFileAPITester:
-    def __init__(self, api_base_url: str = "..."):
+    def __init__(self, api_base_url: str = "http://localhost:8000"):
         self.api_base_url = api_base_url
         self.session = requests.Session()
 
@@ -174,7 +174,7 @@ class MultiFileAPITester:
 
 def main():
     # Настройки
-    API_URL = "..."
+    API_URL = "http://localhost:8000"
     DATASET_DIRECTORY = "dataset_files"  # Директория с файлами
     OUTPUT_PATH = "results_from_files.csv"
     TASK_TYPE = "analyze"  # "analyze" или "summarize"
