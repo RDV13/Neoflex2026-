@@ -1,0 +1,16 @@
+Зависимости:
+
+fastapi
+ollama
+sentence-transformers
+rank-bm25
+faiss-cpu
+python-docx
+PyPDF2
+odfdo
+pandas
+scikit-learn
+matplotlib
+seaborn
+import-ipynb
+pydantic
