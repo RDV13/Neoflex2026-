@@ -14,14 +14,18 @@ class HybridRetriever:
         # Лексический поиск
         self.bm25 = None
         self.documents = []
+        self.tokenized_corpus = []  # Храним токенизированный корпус
 
     def add_documents(self, texts: List[str], metadata: List[Dict] = None):
         """Добавляет документы в ретривер"""
         self.documents.extend(texts)
 
-        # Обновляем BM25
-        tokenized_corpus = [doc.split(" ") for doc in texts]
-        self.bm25 = BM25Okapi(tokenized_corpus)
+        # Токенизируем новые документы
+        new_tokenized = [doc.split(" ") for doc in texts]
+        self.tokenized_corpus.extend(new_tokenized)
+
+        # Перестраиваем BM25 на всём корпусе
+        self.bm25 = BM25Okapi(self.tokenized_corpus)
 
         # Обновляем векторный индекс
         new_embeddings = self.embedding_model.encode(texts)
@@ -49,8 +53,10 @@ class HybridRetriever:
 
         # Гибридная оценка: среднее нормализованных оценок
         hybrid_scores = {}
+        max_bm25 = max(bm25_scores) if bm25_scores else 1
         for idx, score in enumerate(bm25_scores):
-            hybrid_scores[idx] = score / max(bm25_scores) if max(bm25_scores) > 0 else 0
+            normalized_score = score / max_bm25 if max_bm25 > 0 else 0
+            hybrid_scores[idx] = normalized_score
 
         for i, (sim, idx) in enumerate(zip(similarities[0], indices[0])):
             if idx in hybrid_scores:
