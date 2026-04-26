@@ -41,7 +41,7 @@ class HybridRetriever:
         # Создаём FAISS индекс
         dimension = self.embeddings.shape[1]
         self.index = faiss.IndexFlatIP(dimension)
-        self.index.add(self.embeddings
+        self.index.add(self.embeddings)
 
     def retrieve(self, query: str, k: int = 3) -> List[Dict]:
         """Выполняет гибридный поиск"""
