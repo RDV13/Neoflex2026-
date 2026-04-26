@@ -44,38 +44,45 @@ class HybridRetriever:
         self.index.add(self.embeddings)
 
     def retrieve(self, query: str, k: int = 3) -> List[Dict]:
-        """Выполняет гибридный поиск"""
+        """Выполняет гибридный поиск."""
         # Лексический поиск (BM25)
-        bm25_scores = self.bm25.get_scores(query.split(" "))
-        bm25_top_k = np.argsort(bm25_scores)[-k:]
+        try:
+            bm25_scores = self.bm25.get_scores(query.split(" "))
+        except Exception:
+            # Если BM25 не работает, используем нулевые оценки
+            bm25_scores = np.zeros(len(self.documents))
 
         # Семантический поиск (векторный)
         query_embedding = self.embedding_model.encode([query]).astype('float32')
-        faiss.normalize_L2(query_embedding)  # Нормализуем запрос
+        faiss.normalize_L2(query_embedding)
         similarities, indices = self.index.search(
             query_embedding.astype('float32'), k
         )
 
         # Гибридная оценка: среднее нормализованных оценок
-        if bm25_scores.size > 0:
+        hybrid_scores = {}
+
+        # Безопасная обработка BM25 оценок
+        if len(bm25_scores) > 0:
             max_bm25 = np.max(bm25_scores)
             for idx, score in enumerate(bm25_scores):
                 normalized_score = score / max_bm25 if max_bm25 != 0 else 0
                 hybrid_scores[idx] = normalized_score
         else:
-            # Если bm25_scores пустой, инициализируем нулевыми оценками
             for idx in range(len(self.documents)):
                 hybrid_scores[idx] = 0.0
 
-
-        for i, (sim, idx) in enumerate(zip(similarities[0], indices[0])):
+        # Добавляем семантические оценки
+        for sim, idx in zip(similarities[0], indices[0]):
             if idx in hybrid_scores:
                 hybrid_scores[idx] = (hybrid_scores[idx] + sim) / 2
             else:
                 hybrid_scores[idx] = sim
 
+
         # Сортируем и берём топ-k
         sorted_results = sorted(hybrid_scores.items(), key=lambda x: x[1], reverse=True)[:k]
+
 
         results = []
         for doc_idx, score in sorted_results:
