@@ -57,11 +57,16 @@ class HybridRetriever:
         )
 
         # Гибридная оценка: среднее нормализованных оценок
-        hybrid_scores = {}
-        max_bm25 = max(bm25_scores) if bm25_scores else 1
-        for idx, score in enumerate(bm25_scores):
-            normalized_score = score / max_bm25 if max_bm25 > 0 else 0
-            hybrid_scores[idx] = normalized_score
+        if bm25_scores.size > 0:
+            max_bm25 = np.max(bm25_scores)
+            for idx, score in enumerate(bm25_scores):
+                normalized_score = score / max_bm25 if max_bm25 != 0 else 0
+                hybrid_scores[idx] = normalized_score
+        else:
+            # Если bm25_scores пустой, инициализируем нулевыми оценками
+            for idx in range(len(self.documents)):
+                hybrid_scores[idx] = 0.0
+
 
         for i, (sim, idx) in enumerate(zip(similarities[0], indices[0])):
             if idx in hybrid_scores:
